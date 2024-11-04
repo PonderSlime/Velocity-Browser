@@ -100,7 +100,8 @@ celerybeat-schedule
 .env
 .venv
 env/
-venv/
+bin/
+lib/
 ENV/
 env.bak/
 venv.bak/
