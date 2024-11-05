@@ -1,0 +1,28 @@
+QLabel {
+    background-color: red;
+}
+
+QLabel#title {
+    font-size: 20px;
+}
+QPushButton {
+    background-color: red;
+}
+QToolBar {
+    background-color: #262626;
+    color: #FFFFFF;
+    font-family: Titillium;
+    font-size: 15px;
+}
+QLineEdit {
+    background-color: #262626;
+    color: #FFFFFF;
+    font-family: Titillium;
+    font-size: 15px;
+}
+QTabWidget {
+    background-color: #262626;
+    color: #FFFFFF;
+    font-family: Titillium;
+    font-size: 15px;
+}
