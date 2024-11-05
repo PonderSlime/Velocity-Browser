@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QVBoxLayout, QWidget, QLineEdit, QPushButton, \
-    QTabBar, QHBoxLayout, QMenu
-from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+    QTabBar, QHBoxLayout, QMenu, QFileDialog
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineDownloadItem
 from PyQt5.QtCore import QUrl, Qt
 
 
@@ -39,6 +39,7 @@ class Browser(QMainWindow):
 
         main_layout = QVBoxLayout()
         self.tabs = CustomTabWidget()
+        self.child = CustomWebEngineView(self)
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_current_tab)
@@ -134,6 +135,31 @@ class Browser(QMainWindow):
             self.url_bar.setText(qurl.toString())
             self.url_bar.setCursorPosition(0)
 
+    def save_page(self):
+        current_browser = self.tabs.currentWidget()
+        if current_browser:
+            url = current_browser.url()
+            if url.isValid():
+                # Ask the user where to save the file
+                file_name, _ = QFileDialog.getSaveFileName(self, "Save Page As", "",
+                                                           "HTML Files (*.html);;All Files (*)")
+                if file_name:
+                    # Ensure the file has a .html extension
+                    if not file_name.endswith('.html'):
+                        file_name += '.html'
+
+                    # Here we would use the download signal instead
+                    # You can now connect this method to the download requested signal
+                    current_browser.page().profile().downloadRequested.connect(
+                        lambda download: self.handle_download_requested(download, file_name)
+                    )
+
+    def handle_download_requested(self, download, file_name):
+        # Accept the download and set the filename and format
+        download.setDownloadFileName(file_name)
+        download.setSavePageFormat(QWebEngineDownloadItem.CompleteHtmlSaveFormat)
+        download.accept()  # Start the download
+
 class CustomWebEngineView(QWebEngineView):
     def __init__(self, browser):
         super().__init__()
@@ -141,16 +167,29 @@ class CustomWebEngineView(QWebEngineView):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
+    def handle_download_requested(self, download):
+        # Optionally handle the download here
+        download.accept()  # Accept the download
+
     def show_context_menu(self, position):
         # Create the default context menu
         menu = self.page().createStandardContextMenu()
 
         link_url = self.page().contextMenuData().linkUrl()
         for action in menu.actions():
-            if action.text() == "Open link in new tab":  # Specify the exact text of the item to remove
-                if link_url.isValid():
+            if link_url.isValid():
+                if action.text() == "Open link in new tab":  # Specify the exact text of the item to remove
                     action.triggered.connect(lambda: self.browser.add_new_tab(link_url, "New Tab"))
+                if action.text() == "Open link in new window":
+                    action.triggered.connect(lambda: self.open_link_in_new_window(link_url))
+            if action.text() == "Save page":
+                action.triggered.connect(self.browser.save_page)
         menu.exec_(self.mapToGlobal(position))
+
+    def open_link_in_new_window(self, url):
+        new_window  = Browser()
+        new_window.add_new_tab(url, "New Window")
+        new_window.show()
 
 app = QApplication(sys.argv)
 with open("style.qss", "r") as f:
