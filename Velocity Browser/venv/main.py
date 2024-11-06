@@ -1,8 +1,9 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QVBoxLayout, QWidget, QLineEdit, QPushButton, \
-    QTabBar, QHBoxLayout, QMenu, QFileDialog
+    QTabBar, QHBoxLayout, QMenu, QFileDialog, QTextEdit
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineDownloadItem
 from PyQt5.QtCore import QUrl, Qt
+from setuptools.package_index import htmldecode
 
 
 class CustomTabWidget(QTabWidget):
@@ -45,6 +46,7 @@ class Browser(QMainWindow):
         self.tabs.tabCloseRequested.connect(self.close_current_tab)
         self.tabs.currentChanged.connect(self.update_urlbar)
         main_layout.addWidget(self.tabs)
+        self.source_tab_index = None  # Track the source tab index
 
         toolbar = QHBoxLayout()
         back_btn = QPushButton('←', self)
@@ -160,6 +162,36 @@ class Browser(QMainWindow):
         download.setSavePageFormat(QWebEngineDownloadItem.CompleteHtmlSaveFormat)
         download.accept()  # Start the download
 
+    def view_page_source(self):
+        if self.source_tab_index is not None and self.source_tab_index < self.tabs.count():
+            current_browser = self.tabs.currentWidget()
+            if isinstance(current_browser, QWebEngineView):
+                current_browser.page().toHtml(self.update_page_source_tab)
+            self.tabs.setCurrentIndex(self.source_tab_index)
+            return
+        current_browser = self.tabs.currentWidget()
+        if isinstance(current_browser, QWebEngineView):
+            current_browser.page().toHtml(self.handle_page_source)
+
+    def handle_page_source(self, raw_html):
+        source_tab = QWidget(self)
+        layout = QVBoxLayout()
+        source_tab.setLayout(layout)
+
+        text_edit = QTextEdit()
+        text_edit.setPlainText(raw_html)
+        text_edit.setReadOnly(True)
+        layout.addWidget(text_edit)
+
+        self.source_tab_index = self.tabs.addTab(source_tab, "Page Source")
+        self.tabs.setCurrentIndex(self.source_tab_index)
+
+    def update_page_source_tab(self, raw_html):
+        source_tab = self.tabs.widget(self.source_tab_index)
+        text_edit = source_tab.findChild(QTextEdit)
+        if text_edit:
+            text_edit.setPlainText(raw_html)
+
 class CustomWebEngineView(QWebEngineView):
     def __init__(self, browser):
         super().__init__()
@@ -184,6 +216,8 @@ class CustomWebEngineView(QWebEngineView):
                     action.triggered.connect(lambda: self.open_link_in_new_window(link_url))
             if action.text() == "Save page":
                 action.triggered.connect(self.browser.save_page)
+            if action.text() == "View page source":
+                action.triggered.connect(self.browser.view_page_source)
         menu.exec_(self.mapToGlobal(position))
 
     def open_link_in_new_window(self, url):
