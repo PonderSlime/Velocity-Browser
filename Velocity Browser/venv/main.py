@@ -1,6 +1,8 @@
 import sys
+from fileinput import close
+
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QVBoxLayout, QWidget, QLineEdit, QPushButton, \
-    QTabBar, QHBoxLayout, QMenu, QFileDialog, QTextEdit
+    QTabBar, QHBoxLayout, QMenu, QFileDialog, QTextEdit, QSplitter, QAction
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineDownloadItem
 from PyQt5.QtCore import QUrl, Qt
 from setuptools.package_index import htmldecode
@@ -39,14 +41,36 @@ class Browser(QMainWindow):
         self.setGeometry(100, 100, 1200, 800)
 
         main_layout = QVBoxLayout()
+        self.splitter = QSplitter(Qt.Horizontal)
+
         self.tabs = CustomTabWidget()
-        self.child = CustomWebEngineView(self)
         self.tabs.setDocumentMode(True)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_current_tab)
         self.tabs.currentChanged.connect(self.update_urlbar)
         main_layout.addWidget(self.tabs)
         self.source_tab_index = None  # Track the source tab index
+
+        self.dev_tools = QWebEngineView()
+        self.dev_tools.setWindowTitle("Developer Tools")
+
+        close_btn = QPushButton("Close Inspector")
+        close_btn.clicked.connect(self.close_dev_tools)
+        close_btn.setStyleSheet('background-color: #FF6347; color: white; border-radius: 5px;')
+
+        dev_tools_layout = QVBoxLayout()
+        dev_tools_layout.addWidget(self.dev_tools)
+        dev_tools_layout.addWidget(close_btn)
+        self.dev_tools_container = QWidget()
+        self.dev_tools_container.setLayout(dev_tools_layout)
+
+        self.splitter.addWidget(self.tabs)
+        self.splitter.addWidget(self.dev_tools_container)
+        self.splitter.setSizes([1000, 0])
+
+        main_layout.addWidget(self.splitter)
+        self.dev_tools_container.setEnabled(False)
+        self.dev_tools_container.hide()
 
         toolbar = QHBoxLayout()
         back_btn = QPushButton('←', self)
@@ -88,6 +112,9 @@ class Browser(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
+        self.setCursor(Qt.ArrowCursor)
+        self.dev_tools.setCursor(Qt.ArrowCursor)
+
     def navigate_back(self):
         current_browser = self.tabs.currentWidget()
         if current_browser:
@@ -107,7 +134,7 @@ class Browser(QMainWindow):
         if qurl is None:
             qurl = QUrl("https://www.google.com")
 
-        browser = CustomWebEngineView(self)
+        browser = CustomWebEngineView(self, self.dev_tools)
         browser.setUrl(qurl)
         browser.urlChanged.connect(self.update_urlbar)
         i = self.tabs.addTab(browser, label)
@@ -192,12 +219,32 @@ class Browser(QMainWindow):
         if text_edit:
             text_edit.setPlainText(raw_html)
 
+    def open_dev_tools(self):
+        self.dev_tools_container.show()
+        self.dev_tools_container.setEnabled(True)
+        self.splitter.setSizes([700, 800])
+        self.dev_tools.setCursor(Qt.ArrowCursor)
+        self.setCursor(Qt.ArrowCursor)
+
+    def close_dev_tools(self):
+        self.dev_tools_container.hide()
+        self.dev_tools_container.setEnabled(False)
+        self.splitter.setSizes([1000, 0])
+
+    def setCursor(self, cursor):
+        # Ensure the cursor remains ArrowCursor throughout
+        super().setCursor(Qt.ArrowCursor)  # Always reset to ArrowCursor
+        self.dev_tools.setCursor(Qt.ArrowCursor)
 class CustomWebEngineView(QWebEngineView):
-    def __init__(self, browser):
+    def __init__(self, browser, dev_tools):
         super().__init__()
         self.browser = browser
+        self.dev_tools = dev_tools
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
+        self.page().setDevToolsPage(self.dev_tools.page()) # this is the problem! For now, it is just visual, luckily!
+        self.browser.setCursor(Qt.ArrowCursor)
+        self.browser.dev_tools.setCursor(Qt.ArrowCursor)
 
     def handle_download_requested(self, download):
         # Optionally handle the download here
@@ -218,6 +265,8 @@ class CustomWebEngineView(QWebEngineView):
                 action.triggered.connect(self.browser.save_page)
             if action.text() == "View page source":
                 action.triggered.connect(self.browser.view_page_source)
+            if action.text() == "Inspect":
+               action.triggered.connect(self.browser.open_dev_tools)
         menu.exec_(self.mapToGlobal(position))
 
     def open_link_in_new_window(self, url):
