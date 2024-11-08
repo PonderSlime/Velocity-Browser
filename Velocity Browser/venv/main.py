@@ -1,10 +1,13 @@
+import os.path
 import sys
 from fileinput import close
+from operator import index
 
+from PyQt5.QtWebChannel import QWebChannel
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QVBoxLayout, QWidget, QLineEdit, QPushButton, \
     QTabBar, QHBoxLayout, QMenu, QFileDialog, QTextEdit, QSplitter, QAction
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineDownloadItem
-from PyQt5.QtCore import QUrl, Qt
+from PyQt5.QtCore import QUrl, Qt, QObject, pyqtSlot
 from setuptools.package_index import htmldecode
 
 
@@ -16,6 +19,16 @@ class CustomTabWidget(QTabWidget):
     def add_new_tab_btn(self, action):
         self.tabBar().add_new_tab_btn(action)
 
+class BrowserSettings(QObject):
+    def __init__(self, browser):
+        super().__init__()
+        self.browser = browser
+        self.home_url = "https://google.com"
+
+    @pyqtSlot(str)
+    def setHomeUrl(self, url):
+        self.home_url = url
+        print(f"Home URL set to: {url}")
 
 class CustomTabBar(QTabBar):
     def __init__(self, parent=None):
@@ -96,8 +109,14 @@ class Browser(QMainWindow):
         toolbar.addWidget(home_action)
 
         self.url_bar = QLineEdit()
-        self.url_bar.returnPressed.connect(self.navigate_to_url)
+        self.url_bar.returnPressed.connect(self.validate_and_navigate)
         toolbar.addWidget(self.url_bar)
+
+        menu_button = QPushButton("☰")  # Menu icon
+        menu = QMenu(self)
+
+        menu_button.setMenu(menu)
+        toolbar.addWidget(menu_button)
 
         main_layout.addLayout(toolbar)
         self.add_new_tab(QUrl("https://www.google.com"), "Home")
@@ -137,6 +156,7 @@ class Browser(QMainWindow):
         browser = CustomWebEngineView(self, self.dev_tools)
         browser.setUrl(qurl)
         browser.urlChanged.connect(self.update_urlbar)
+        browser.titleChanged.connect(lambda title, browser=browser: self.update_tab_title(title, browser))
         i = self.tabs.addTab(browser, label)
         self.tabs.setCurrentIndex(i)
 
@@ -149,13 +169,32 @@ class Browser(QMainWindow):
         if current_browser:
             current_browser.setUrl(QUrl("https://www.google.com"))
 
-    def navigate_to_url(self):
+    def validate_and_navigate(self):
         current_browser = self.tabs.currentWidget()
         if current_browser:
             url = QUrl(self.url_bar.text())
-            if url.scheme() == "":
-                url.setScheme("https")
-            current_browser.setUrl(url)
+            search = self.url_bar.text()
+            if url.isValid() and (url.scheme() == "http" or url.scheme() == "https"):
+                print("Full URL detected with scheme:", url)
+                current_browser.setUrl(url)
+            elif "." in search and " " not in search:
+                print("Partial URL detected without scheme:", url)
+                if not url.scheme():
+                    url.setScheme("http")
+
+                current_browser.setUrl(url)
+            else:
+                self.perform_search(search)
+                print("Search query detected:", search)
+
+    def perform_search(self, search_text=None):
+        current_browser = self.tabs.currentWidget()
+        if search_text is None:
+            search_text = self.url_bar.text()
+
+        search_url = f"https://duckduckgo.com/?q={search_text}"
+        current_browser.setUrl(QUrl(search_url))
+
 
     def update_urlbar(self, qurl=None):
         current_browser = self.tabs.currentWidget()
@@ -163,6 +202,11 @@ class Browser(QMainWindow):
             qurl = current_browser.url()
             self.url_bar.setText(qurl.toString())
             self.url_bar.setCursorPosition(0)
+
+    def update_tab_title(self, title, browser):
+        index = self.tabs.indexOf(browser)
+        if index != -1:
+            self.tabs.setTabText(index,title)
 
     def save_page(self):
         current_browser = self.tabs.currentWidget()
@@ -222,7 +266,7 @@ class Browser(QMainWindow):
     def open_dev_tools(self):
         self.dev_tools_container.show()
         self.dev_tools_container.setEnabled(True)
-        self.splitter.setSizes([700, 800])
+        self.splitter.setSizes([800,400])
         self.dev_tools.setCursor(Qt.ArrowCursor)
         self.setCursor(Qt.ArrowCursor)
 
@@ -235,6 +279,7 @@ class Browser(QMainWindow):
         # Ensure the cursor remains ArrowCursor throughout
         super().setCursor(Qt.ArrowCursor)  # Always reset to ArrowCursor
         self.dev_tools.setCursor(Qt.ArrowCursor)
+
 class CustomWebEngineView(QWebEngineView):
     def __init__(self, browser, dev_tools):
         super().__init__()
@@ -242,7 +287,7 @@ class CustomWebEngineView(QWebEngineView):
         self.dev_tools = dev_tools
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
-        self.page().setDevToolsPage(self.dev_tools.page()) # this is the problem! For now, it is just visual, luckily!
+        #self.page().setDevToolsPage(self.dev_tools.page()) # this is the problem! For now, it is just visual, luckily!
         self.browser.setCursor(Qt.ArrowCursor)
         self.browser.dev_tools.setCursor(Qt.ArrowCursor)
 
