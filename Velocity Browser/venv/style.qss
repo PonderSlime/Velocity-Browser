@@ -6,23 +6,58 @@ QLabel#title {
     font-size: 20px;
 }
 QPushButton {
-    background-color: red;
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.5,
+        fx: 0.5, fy: 0.5,
+        stop: 0 #bd87d1,
+        stop: 1 #1f2568
+    );
+    border-radius: 20px;
+    font-size: 16px;
+    text-align: center;
 }
-QToolBar {
-    background-color: #262626;
-    color: #FFFFFF;
+QPushButton:hover {
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.5,
+        fx: 0.5, fy: 0.5,
+        stop: 0 #bd87d1,
+        stop: 1 #2d398a
+    );
+}
+#newTabButton {
+    border-radius: 15px;
+}
+QTabBar {
+    background-color: transparent;
+    color: #ffffff;
     font-family: Titillium;
     font-size: 15px;
+    border-radius: 16px;
+}
+QMainWindow {
+    background : qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #76e7f9,
+        stop: 1 #ef6e95
+    );
+    border-radius: 200px
 }
 QLineEdit {
-    background-color: #262626;
-    color: #FFFFFF;
+    background : qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #fcf2be,
+        stop: 1 #f57fad
+    );
+    color: #000;
     font-family: Titillium;
     font-size: 15px;
+    height: 35px;
+    border-radius: 16px;
 }
 QTabWidget {
-    background-color: #262626;
+
     color: #FFFFFF;
     font-family: Titillium;
     font-size: 15px;
+    border-radius: 16px;
 }

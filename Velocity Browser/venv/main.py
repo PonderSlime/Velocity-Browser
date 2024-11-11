@@ -2,14 +2,43 @@ import os.path
 import sys
 from fileinput import close
 from operator import index
+from posix import truncate
 
 from PyQt5.QtWebChannel import QWebChannel
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QVBoxLayout, QWidget, QLineEdit, QPushButton, \
-    QTabBar, QHBoxLayout, QMenu, QFileDialog, QTextEdit, QSplitter, QAction
+    QTabBar, QHBoxLayout, QMenu, QFileDialog, QTextEdit, QSplitter, QAction, QDialog, QLabel, QComboBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineDownloadItem
 from PyQt5.QtCore import QUrl, Qt, QObject, pyqtSlot
 from setuptools.package_index import htmldecode
+from PyQt5.QtGui import QIcon
 
+
+class ExternalMenu(QDialog):
+    def __init__(self, browser):
+        super().__init__()
+        self.setWindowTitle("Menu")
+        self.browser = browser
+        self.setGeometry(300, 200, 400, 300)
+
+        layout = QVBoxLayout()
+        label = QLabel("This is an external window", self)
+        layout.addWidget(label)
+
+        self.search_engine_dropdown = QComboBox(self)
+        self.search_engine_dropdown.addItems(self.browser.search_engines.keys())
+        self.search_engine_dropdown.currentIndexChanged.connect(self.update_search_engine)
+        layout.addWidget(self.search_engine_dropdown)
+
+        close_btn = QPushButton("Close", self)
+        close_btn.clicked.connect(self.close)
+        layout.addWidget(close_btn)
+
+
+        self.setLayout(layout)
+
+    def update_search_engine(self):
+        selected_engine = self.search_engine_dropdown.currentText()
+        self.browser.search_engine_url = self.browser.search_engines[selected_engine]
 
 class CustomTabWidget(QTabWidget):
     def __init__(self, *args, **kwargs):
@@ -39,6 +68,7 @@ class CustomTabBar(QTabBar):
 
         self.new_tab_btn = QPushButton("+", self)
         self.new_tab_btn.setFixedSize(30, 30)
+        self.new_tab_btn.setObjectName("newTabButton")
 
         self.tab_layout.addStretch()
         self.tab_layout.addWidget(self.new_tab_btn)
@@ -50,11 +80,20 @@ class CustomTabBar(QTabBar):
 class Browser(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        self.search_engines = {
+            "DuckDuckGo": "https://duckduckgo.com/?q={}",
+            "Google": "https://www.google.com/search?q={}",
+            "Bing": "https://www.bing.com/search?q={}",
+            "Velocity": "https://ponderslime.github.io/Velocity-Search-Engine/#gsc.q={}"
+        }
         self.setWindowTitle("Velocity Browser")
         self.setGeometry(100, 100, 1200, 800)
+        self.search_engine_url = "https://ponderslime.github.io/Velocity-Search-Engine/#gsc.q={}"
 
         main_layout = QVBoxLayout()
         self.splitter = QSplitter(Qt.Horizontal)
+        self.external_menu = ExternalMenu(self)
 
         self.tabs = CustomTabWidget()
         self.tabs.setDocumentMode(True)
@@ -64,8 +103,10 @@ class Browser(QMainWindow):
         main_layout.addWidget(self.tabs)
         self.source_tab_index = None  # Track the source tab index
 
+        #--Dev Tools Start--#
         self.dev_tools = QWebEngineView()
         self.dev_tools.setWindowTitle("Developer Tools")
+
 
         close_btn = QPushButton("Close Inspector")
         close_btn.clicked.connect(self.close_dev_tools)
@@ -84,28 +125,31 @@ class Browser(QMainWindow):
         main_layout.addWidget(self.splitter)
         self.dev_tools_container.setEnabled(False)
         self.dev_tools_container.hide()
+        #--Dev Tools End--#
 
+        self.tabs.add_new_tab_btn(lambda: self.add_new_tab(QUrl("https://ponderslime.github.io/Velocity-Search-Engine/"), "New Tab"))
+
+        #--Toolbar Start--#
         toolbar = QHBoxLayout()
+        toolbar.setObjectName("mainToolBar")
         back_btn = QPushButton('←', self)
         back_btn.clicked.connect(self.navigate_back)
-        back_btn.setFixedSize(30, 30)
+        back_btn.setFixedSize(40, 40)
         toolbar.addWidget(back_btn)
 
         forward_btn = QPushButton('→')
         forward_btn.clicked.connect(self.navigate_forward)
-        forward_btn.setFixedSize(30, 30)
+        forward_btn.setFixedSize(40, 40)
         toolbar.addWidget(forward_btn)
 
         reload_btn = QPushButton('⟳')
         reload_btn.clicked.connect(self.reload_page)
-        reload_btn.setFixedSize(30, 30)
+        reload_btn.setFixedSize(40, 40)
         toolbar.addWidget(reload_btn)
-
-        self.tabs.add_new_tab_btn(lambda: self.add_new_tab(QUrl("https://www.google.com"), "New Tab"))
 
         home_action = QPushButton("🏠")
         home_action.clicked.connect(self.navigate_home)
-        home_action.setFixedSize(30, 30)
+        home_action.setFixedSize(40, 40)
         toolbar.addWidget(home_action)
 
         self.url_bar = QLineEdit()
@@ -113,13 +157,22 @@ class Browser(QMainWindow):
         toolbar.addWidget(self.url_bar)
 
         menu_button = QPushButton("☰")  # Menu icon
+        menu_button.setFixedSize(40,40)
         menu = QMenu(self)
-
+        settings_action = QAction("Settings", self)
+        settings_action.triggered.connect(self.show_external_menu)
+        menu.addAction(settings_action)
         menu_button.setMenu(menu)
         toolbar.addWidget(menu_button)
 
         main_layout.addLayout(toolbar)
-        self.add_new_tab(QUrl("https://www.google.com"), "Home")
+        #--Toolbar End--#
+        if self.tabs.count() == 0:
+            self.add_new_tab(QUrl("https://ponderslime.github.io/Velocity-Search-Engine/"), "Home")
+        else:
+            self.close_current_tab(self)
+            print("attempted close")
+
 
         self.content_widget = QWidget()
         self.content_layout = QVBoxLayout()
@@ -131,8 +184,9 @@ class Browser(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
-        self.setCursor(Qt.ArrowCursor)
-        self.dev_tools.setCursor(Qt.ArrowCursor)
+    def show_external_menu(self):
+        # Show the external menu when the button is clicked
+        self.external_menu.show()
 
     def navigate_back(self):
         current_browser = self.tabs.currentWidget()
@@ -151,7 +205,7 @@ class Browser(QMainWindow):
 
     def add_new_tab(self, qurl=None, label="New Tab"):
         if qurl is None:
-            qurl = QUrl("https://www.google.com")
+            qurl = QUrl("https://ponderslime.github.io/Velocity-Search-Engine/")
 
         browser = CustomWebEngineView(self, self.dev_tools)
         browser.setUrl(qurl)
@@ -167,7 +221,7 @@ class Browser(QMainWindow):
     def navigate_home(self):
         current_browser = self.tabs.currentWidget()
         if current_browser:
-            current_browser.setUrl(QUrl("https://www.google.com"))
+            current_browser.setUrl(QUrl("https://ponderslime.github.io/Velocity-Search-Engine/"))
 
     def validate_and_navigate(self):
         current_browser = self.tabs.currentWidget()
@@ -184,51 +238,39 @@ class Browser(QMainWindow):
 
                 current_browser.setUrl(url)
             else:
-                self.perform_search(search)
-                print("Search query detected:", search)
+                search_url = self.search_engine_url.format(search.replace(" ", "+"))
+                url = QUrl(search_url)
+                current_browser.setUrl(url)
 
-    def perform_search(self, search_text=None):
-        current_browser = self.tabs.currentWidget()
-        if search_text is None:
-            search_text = self.url_bar.text()
-
-        search_url = f"https://duckduckgo.com/?q={search_text}"
-        current_browser.setUrl(QUrl(search_url))
-
-
-    def update_urlbar(self, qurl=None):
+    def update_urlbar(self):
         current_browser = self.tabs.currentWidget()
         if current_browser and isinstance(current_browser, QWebEngineView):
             qurl = current_browser.url()
             self.url_bar.setText(qurl.toString())
             self.url_bar.setCursorPosition(0)
 
-    def update_tab_title(self, title, browser):
+    def update_tab_title(self, title, browser, max_length=15):
+        truncated_title = title if len(title) <= max_length else title[:max_length] + "..."
         index = self.tabs.indexOf(browser)
+
         if index != -1:
-            self.tabs.setTabText(index,title)
+            self.tabs.setTabText(index,truncated_title)
 
     def save_page(self):
         current_browser = self.tabs.currentWidget()
         if current_browser:
             url = current_browser.url()
             if url.isValid():
-                # Ask the user where to save the file
                 file_name, _ = QFileDialog.getSaveFileName(self, "Save Page As", "",
                                                            "HTML Files (*.html);;All Files (*)")
                 if file_name:
-                    # Ensure the file has a .html extension
                     if not file_name.endswith('.html'):
                         file_name += '.html'
-
-                    # Here we would use the download signal instead
-                    # You can now connect this method to the download requested signal
                     current_browser.page().profile().downloadRequested.connect(
                         lambda download: self.handle_download_requested(download, file_name)
                     )
 
     def handle_download_requested(self, download, file_name):
-        # Accept the download and set the filename and format
         download.setDownloadFileName(file_name)
         download.setSavePageFormat(QWebEngineDownloadItem.CompleteHtmlSaveFormat)
         download.accept()  # Start the download
@@ -248,12 +290,10 @@ class Browser(QMainWindow):
         source_tab = QWidget(self)
         layout = QVBoxLayout()
         source_tab.setLayout(layout)
-
         text_edit = QTextEdit()
         text_edit.setPlainText(raw_html)
         text_edit.setReadOnly(True)
         layout.addWidget(text_edit)
-
         self.source_tab_index = self.tabs.addTab(source_tab, "Page Source")
         self.tabs.setCurrentIndex(self.source_tab_index)
 
@@ -292,13 +332,11 @@ class CustomWebEngineView(QWebEngineView):
         self.browser.dev_tools.setCursor(Qt.ArrowCursor)
 
     def handle_download_requested(self, download):
-        # Optionally handle the download here
-        download.accept()  # Accept the download
+        download.accept()
 
     def show_context_menu(self, position):
         # Create the default context menu
         menu = self.page().createStandardContextMenu()
-
         link_url = self.page().contextMenuData().linkUrl()
         for action in menu.actions():
             if link_url.isValid():
@@ -317,12 +355,76 @@ class CustomWebEngineView(QWebEngineView):
     def open_link_in_new_window(self, url):
         new_window  = Browser()
         new_window.add_new_tab(url, "New Window")
+        new_window.close_current_tab(0)
         new_window.show()
 
 app = QApplication(sys.argv)
-with open("style.qss", "r") as f:
-    _style = f.read()
-    app.setStyleSheet(_style)
+app.setWindowIcon(QIcon("./assets/Logo-small.ico"))
+app.setStyleSheet("""
+QLabel {
+    background-color: red;
+}
+
+QLabel#title {
+    font-size: 20px;
+}
+QPushButton {
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.5,
+        fx: 0.5, fy: 0.5,
+        stop: 0 #bd87d1,
+        stop: 1 #1f2568
+    );
+    border-radius: 20px;
+    font-size: 16px;
+    text-align: center;
+}
+QPushButton:hover {
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.5,
+        fx: 0.5, fy: 0.5,
+        stop: 0 #bd87d1,
+        stop: 1 #2d398a
+    );
+}
+#newTabButton {
+    border-radius: 15px;
+}
+QTabBar {
+    background-color: transparent;
+    color: #ffffff;
+    font-family: Titillium;
+    font-size: 15px;
+    border-radius: 16px;
+}
+QMainWindow {
+    background : qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #76e7f9,
+        stop: 1 #ef6e95
+    );
+    border-radius: 200px
+}
+QLineEdit {
+    background : qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #fcf2be,
+        stop: 1 #f57fad
+    );
+    color: #000;
+    font-family: Titillium;
+    font-size: 15px;
+    height: 35px;
+    border-radius: 16px;
+}
+QTabWidget {
+
+    color: #FFFFFF;
+    font-family: Titillium;
+    font-size: 15px;
+    border-radius: 16px;
+}
+""")
 window = Browser()
 window.show()
 sys.exit(app.exec_())
