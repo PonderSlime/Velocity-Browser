@@ -1,5 +1,6 @@
 import os.path
 import sys
+import time
 from fileinput import close
 from operator import index
 from posix import truncate
@@ -80,6 +81,7 @@ class CustomTabBar(QTabBar):
 class Browser(QMainWindow):
     def __init__(self):
         super().__init__()
+
 
         self.search_engines = {
             "DuckDuckGo": "https://duckduckgo.com/?q={}",
@@ -425,6 +427,10 @@ QTabWidget {
     border-radius: 16px;
 }
 """)
+start_time = time.time()
 window = Browser()
 window.show()
+end_time = time.time()
+elapsed_time = (end_time - start_time) * 1000
+print(f"Startup Time: {elapsed_time} milliseconds")
 sys.exit(app.exec_())
