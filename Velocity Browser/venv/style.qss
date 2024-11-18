@@ -28,7 +28,7 @@ QPushButton:hover {
     border-radius: 15px;
 }
 QTabBar {
-    background-color: transparent;
+    background-color: #000000;
     color: #ffffff;
     font-family: Titillium;
     font-size: 15px;
