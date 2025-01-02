@@ -1,9 +1,11 @@
 # velocity
 My open-source web browser project!
 
-Demo link is here: [https://velocity-browser.vercel.app/#download](https://velocity-browser.vercel.app/#download)
+~~Demo link is here: [https://velocity-browser.vercel.app/#download](https://velocity-browser.vercel.app/#download)~~
 
-(The demo link goes to the download page. The page is not the project, only the delivery method of the demo! Please click one of the download options to try it out!)
+clone the repo to try it!
+
+~~(The demo link goes to the download page. The page is not the project, only the delivery method of the demo! Please click one of the download options to try it out!)~~
 
 To run on windows, or to run from the source files, you must run (after downloading the code and opening a terminal window in the venv folder):
 
